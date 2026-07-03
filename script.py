@@ -524,7 +524,15 @@ async def save_amazon_htmls(
 
                     page = await context.new_page()
                     print(f"\n[Amazon {idx}/{len(urls)}] Navigating to {url} ...")
-                    await page.goto(url, wait_until="load")
+                    try:
+                        # 30s hard cap so a slow page can't stall the whole run.
+                        await page.goto(url, wait_until="load", timeout=30000)
+                    except TimeoutError:
+                        print(f"⚠️ navigation timeout for {url} after 30s. Continuing anyway...")
+                        try:
+                            await page.wait_for_load_state("domcontentloaded", timeout=7000)
+                        except TimeoutError:
+                            pass
                     await asyncio.sleep(10)  # Extra wait to ensure dynamic content loads
 
                     # Wait randomly for page content to settle
@@ -753,11 +761,15 @@ async def save_bestbuy_htmls(
 
 
                     try:
-
-                        await page.goto(url, wait_until="load")
+                        # 30s hard cap is the safety net: over the forced HTTP/1.1,
+                        # BestBuy's full 'load' event can be slow/never fire, so
+                        # without a timeout 'load' used to hang the whole run. With
+                        # the 30s cap, a stuck page errors out after 30s and we fall
+                        # back to domcontentloaded below, then continue.
+                        await page.goto(url, wait_until="load", timeout=30000)
                         await asyncio.sleep(10)  # extra wait to ensure stability
                     except TimeoutError as te:
-                        print(f"⚠️ 'load' timeout for {url} after 30s. Continuing anyway...")
+                        print(f"⚠️ navigation timeout for {url} after 30s. Continuing anyway...")
                         try:
                             await page.wait_for_load_state("domcontentloaded", timeout=7000)
                         except TimeoutError:
@@ -784,6 +796,25 @@ async def save_bestbuy_htmls(
                         scroll_y = random.randint(400, 1000)
                         await page.mouse.wheel(0, scroll_y)
                         await human_delay(1, 3)
+
+                    # The price/model come from a JSON-LD block that BestBuy injects
+                    # via client-side JS. Because 'load' can time out over HTTP/1.1,
+                    # explicitly wait for that JSON-LD (with an "offers" field) to be
+                    # present before capturing, so we don't save a half-loaded page
+                    # that parses to Price=None / Model=None.
+                    try:
+                        await page.wait_for_function(
+                            """() => {
+                                const s = document.querySelectorAll('script[type="application/ld+json"]');
+                                for (const el of s) {
+                                    if (el.textContent && el.textContent.indexOf('"offers"') !== -1) return true;
+                                }
+                                return false;
+                            }""",
+                            timeout=20000,
+                        )
+                    except Exception:
+                        print("⚠️ BestBuy JSON-LD offers not detected within 20s; saving page anyway")
 
                     # Extract HTML (resilient to BestBuy's mid-load client-side
                     # navigation which used to make page.content() throw)
@@ -939,7 +970,11 @@ async def save_samsung_htmls(
 
                     page = await context.new_page()
                     print(f"\n[Samsung {idx}/{len(urls)}] Navigating to {url} ...")
-                    await page.goto(url, wait_until="domcontentloaded")
+                    try:
+                        # 30s hard cap so a slow page can't stall the whole run.
+                        await page.goto(url, wait_until="load", timeout=30000)
+                    except TimeoutError:
+                        print(f"⚠️ navigation timeout for {url} after 30s. Continuing anyway...")
 
                     print("Waiting for network to be idle...")
                     await wait_network_idle(page, timeout=20000)
