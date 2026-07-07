@@ -721,12 +721,13 @@ async def save_bestbuy_htmls(
     os.makedirs(output_dir, exist_ok=True)
 
     async with async_playwright() as p:
-        # --disable-http2: BestBuy's CDN breaks Playwright's HTTP/2 on the newer
-        # S26 product pages (net::ERR_HTTP2_PROTOCOL_ERROR), so those pages never
-        # loaded/saved. Forcing HTTP/1.1 makes them load reliably.
-        browser = await p.chromium.launch(
-            headless=headless, slow_mo=100, args=["--disable-http2"]
-        )
+        # NOTE: do NOT pass --disable-http2 here. It was tried to fix the S26
+        # ERR_HTTP2_PROTOCOL_ERROR, but forcing HTTP/1.1 makes BestBuy's CDN
+        # return EMPTY pages for every product from datacenter IPs, so every page
+        # hung on wait_until="load" for the full 30s -> 6h run + no data.
+        # Default HTTP/2 works: S25/older load with data; S26 pages fail fast
+        # (~2s) with the protocol error, caught by the except below.
+        browser = await p.chromium.launch(headless=headless, slow_mo=100)
 
         # Load existing cookies/session state if available
         if os.path.exists(cookies_file):
