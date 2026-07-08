@@ -1059,6 +1059,12 @@ async def save_samsung_htmls(
 # Combined main
 # -----------------------
 async def main():
+    # Capture the run's START time in EST. We snap THIS (not the finish time) to
+    # the nearest scheduled 6-hour mark, so the Timestamp column reflects the
+    # slot the run was launched for and is unaffected by how long scraping takes.
+    run_start_est = datetime.datetime.now(datetime.timezone.utc).astimezone(
+        ZoneInfo("US/Eastern"))
+
     # Replace/extend these lists with the product URLs you want to iterate over
     amazon_urls = [
     "https://www.amazon.com/Samsung-Smartphone-Unlocked-Manufacturer-Warranty/dp/B0F7JRKGH1/ref=sr_1_3?crid=2IIQ350CABWC7&keywords=galaxy%2Bz%2Bfold%2B7",
@@ -1531,9 +1537,18 @@ async def main():
     # am_res / bb_res / sam_res are in URL order, i.e. slot order, so index s
     # maps directly to product group s.
     # -----------------------
-    utc_now = datetime.datetime.now(datetime.timezone.utc)
-    est_now = utc_now.astimezone(ZoneInfo("US/Eastern"))
-    ts_str = est_now.strftime("%d %b %Y, %H:%M")   # e.g. "05 Dec 2025, 07:25"
+    # The run is scheduled 4x/day to launch on 00:00 / 06:00 / 12:00 / 18:00 EST,
+    # but cron / startup jitter means run_start_est is a few minutes off. Snap the
+    # START time (captured at the top of main(), NOT this finish time) to the
+    # nearest 6-hour mark so the Timestamp column always shows one of the four
+    # exact scheduled times, independent of how long scraping took.
+    # Rounding to the nearest multiple of 6h naturally yields 0/6/12/18, and rolls
+    # over to the next day's 00:00 when the run launches just before midnight.
+    _mins = run_start_est.hour * 60 + run_start_est.minute + run_start_est.second / 60
+    _snapped = round(_mins / 360) * 360          # nearest 6h (360 min) boundary
+    est_snapped = run_start_est.replace(hour=0, minute=0, second=0, microsecond=0) \
+        + datetime.timedelta(minutes=_snapped)   # +1440 rolls into the next day
+    ts_str = est_snapped.strftime("%d %b %Y, %H:%M")   # e.g. "05 Dec 2025, 06:00"
 
     excel_file = os.path.join("outputs", "results.xlsx")
     save_results_wip_format(am_res, bb_res, sam_res, samsung_urls, ts_str, excel_file)
