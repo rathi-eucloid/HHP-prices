@@ -801,31 +801,11 @@
             "sameSite": "None"
         },
         {
-            "name": "acs",
-            "value": "012020k1t8p74nxzt10",
-            "domain": ".media6degrees.com",
-            "path": "/",
-            "expires": 1783683671.446869,
-            "httpOnly": false,
-            "secure": true,
-            "sameSite": "None"
-        },
-        {
             "name": "tuuid",
             "value": "ed83578a-8c55-46a4-9b7b-6b670e381819",
             "domain": ".bidswitch.net",
             "path": "/",
             "expires": 1799667671.48145,
-            "httpOnly": false,
-            "secure": true,
-            "sameSite": "None"
-        },
-        {
-            "name": "clid",
-            "value": "2t8p74n011704k8y8ffo0m4k000050020b020302102",
-            "domain": ".media6degrees.com",
-            "path": "/",
-            "expires": 1783683676.356653,
             "httpOnly": false,
             "secure": true,
             "sameSite": "None"
