@@ -145,16 +145,6 @@
             "_crHasCrossSiteAncestor": true
         },
         {
-            "name": "dpm",
-            "value": "03467957710839005042658830491424767906",
-            "domain": ".dpm.demdex.net",
-            "path": "/",
-            "expires": 1783856638.925855,
-            "httpOnly": false,
-            "secure": true,
-            "sameSite": "None"
-        },
-        {
             "name": "MUID",
             "value": "3350EEAD502C65410A86F803512A645A",
             "domain": ".bing.com",
@@ -250,16 +240,6 @@
             "domain": ".ladsp.com",
             "path": "/",
             "expires": 1798535156.279195,
-            "httpOnly": false,
-            "secure": true,
-            "sameSite": "None"
-        },
-        {
-            "name": "uid",
-            "value": "8861093760720254799",
-            "domain": ".turn.com",
-            "path": "/",
-            "expires": 1783856641.852537,
             "httpOnly": false,
             "secure": true,
             "sameSite": "None"
@@ -1013,16 +993,6 @@
             "httpOnly": true,
             "secure": true,
             "sameSite": "Strict"
-        },
-        {
-            "name": "dextp",
-            "value": "477-1-1768304638007|771-1-1768304638206|1123-1-1768304638306|903-1-1768304638407|58342-1-1768304638508|80742-1-1768304638608|152416-1-1768304638709",
-            "domain": ".demdex.net",
-            "path": "/",
-            "expires": 1783856638,
-            "httpOnly": false,
-            "secure": true,
-            "sameSite": "None"
         },
         {
             "name": "AAMC_samsungelectronicsamericainc_0",
