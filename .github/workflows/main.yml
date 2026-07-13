@@ -10,7 +10,7 @@ name: Run price scraper (every 6 hours EST + manual with logging)
 # (During EDT/summer these land one hour later in local wall-clock time.)
 on:
   schedule:
-    - cron: '0 5,11,17,23 * * *'
+    - cron: '0 4,10,16,22 * * *'
   workflow_dispatch: {}
 
 permissions:
@@ -46,23 +46,34 @@ jobs:
       - name: Install Python dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install playwright beautifulsoup4 openpyxl lxml
+          pip install playwright beautifulsoup4 openpyxl lxml playwright-stealth
 
       - name: Install Playwright browsers (with deps)
         run: |
           python -m playwright install --with-deps
 
+      - name: Install Xvfb (virtual display for headful BestBuy)
+        run: |
+          # BestBuy tears down the HTTP/2 connection for headless Chromium, so the
+          # BestBuy scraper runs headful (headless=False). On this display-less
+          # runner we give Chromium a virtual X display via Xvfb.
+          sudo apt-get update
+          sudo apt-get install -y xvfb
+
       - name: Ensure output directory exists
         run: |
           mkdir -p outputs
 
-      - name: Run scraper (headless) and capture logs
+      - name: Run scraper (headful under Xvfb) and capture logs
         id: run-scraper
         run: |
           set -o pipefail
 
-          # run script, capture stdout+stderr to run.log while still printing to job log
-          python script.py 2>&1 | tee run.log
+          # xvfb-run provides a virtual display so the headful BestBuy browser
+          # works on this headless runner. Amazon/Samsung still launch headless
+          # from inside the script; running them under Xvfb too is harmless.
+          xvfb-run -a --server-args="-screen 0 1920x1080x24" \
+            python script.py 2>&1 | tee run.log
           rc=${PIPESTATUS[0]}
           echo "$rc" > run_exit_code.txt
 
@@ -94,7 +105,20 @@ jobs:
           else
             echo "No changes to commit."
           fi
-
+      - name: Send price report email (only on success)
+        if: success()
+        env:
+          # Configure these as repository secrets (Settings -> Secrets -> Actions).
+          # MAIL_USERNAME / MAIL_PASSWORD = the Microsoft mailbox login + password
+          # (use an app password if the account has MFA enabled).
+          MAIL_USERNAME: ${{ secrets.MAIL_USERNAME }}
+          MAIL_PASSWORD: ${{ secrets.MAIL_PASSWORD }}
+          MAIL_TO:       ${{ secrets.MAIL_TO }}
+          MAIL_FROM:     ${{ secrets.MAIL_FROM }}
+          # Microsoft defaults (smtp.office365.com:587) are baked into send_mail.py;
+          # override here only if you use a different Microsoft SMTP endpoint.
+        run: |
+          python send_mail.py
       - name: Collect debug info & show tail of run log
         if: always()
         run: |
