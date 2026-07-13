@@ -81,16 +81,6 @@
             "sameSite": "Lax"
         },
         {
-            "name": "demdex",
-            "value": "03467957710839005042658830491424767906",
-            "domain": ".demdex.net",
-            "path": "/",
-            "expires": 1783899787.002777,
-            "httpOnly": false,
-            "secure": true,
-            "sameSite": "None"
-        },
-        {
             "name": "AMCVS_F6301253512D2BDB0A490D45%40AdobeOrg",
             "value": "1",
             "domain": ".bestbuy.com",
@@ -993,16 +983,6 @@
             "httpOnly": true,
             "secure": true,
             "sameSite": "Strict"
-        },
-        {
-            "name": "AAMC_samsungelectronicsamericainc_0",
-            "value": "REGION%7C9%7CAMSYNCSOP%7C%7CAMSYNCS%7C",
-            "domain": ".samsung.com",
-            "path": "/",
-            "expires": 1783899790,
-            "httpOnly": false,
-            "secure": false,
-            "sameSite": "Lax"
         },
         {
             "name": "rlas3",
