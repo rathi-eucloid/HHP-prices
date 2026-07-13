@@ -153,6 +153,31 @@ def _looks_unavailable(html, site):
     return False
 
 
+def _amazon_buybox_is_used(html):
+    """True when the WINNING Amazon buybox offer is a USED/renewed device.
+
+    We only want NEW-device prices. Some listings (e.g. a couple of S25 Edge
+    variants) have a USED offer as the featured buybox, so the main price
+    container shows the used price. We must NOT capture that.
+
+    Two precise signals, verified against the saved pages:
+      1. <div id="usedBuySection"> — Amazon renders this only when the featured
+         buybox offer's condition is used ("Buy used: $...").
+      2. A "Used: <condition>" label in the buybox (Like New / Very Good / Good /
+         Acceptable).
+    Both fire together on used-buybox pages and on NONE of the new-condition
+    pages — including listings that merely OFFER a used alternative in a separate
+    accordion (their buybox winner is still new), so this does not false-positive.
+    """
+    if not html:
+        return False
+    if re.search(r'id=["\']usedBuySection["\']', html):
+        return True
+    if re.search(r'Used:\s*(Like New|Very Good|Good|Acceptable)', html, re.I):
+        return True
+    return False
+
+
 def iter_ldjson(html):
     """Yield parsed JSON-LD objects from the HTML (regex-sliced, fast)."""
     for m in re.finditer(
@@ -637,6 +662,12 @@ async def save_amazon_htmls(
                         if _looks_unavailable(html_content, "amazon"):
                             print("ℹ️ page marked 'Currently unavailable' -> final, not retrying")
                             break
+                        if _amazon_buybox_is_used(html_content):
+                            # Used-buybox: the new price is genuinely not offered.
+                            # Retrying won't change the condition -> final.
+                            print("ℹ️ buybox is a USED offer -> new price not available, not retrying")
+                            result["status"] = "used_offer"
+                            break
                         print(f"⚠️ price not found & page not marked unavailable (attempt {attempt}/{MAX_ATTEMPTS})")
                     except Exception as e:
                         print(f"❌ Error processing URL {url} (attempt {attempt}/{MAX_ATTEMPTS}): {e}")
@@ -711,6 +742,13 @@ def parse_amazon_html(html_file_path="amazon.html", expected_url=None):
                 if t:
                     price = t
                     break
+
+    # -------- USED-OFFER GUARD --------
+    # If the featured buybox is a USED/renewed device, the price we just read is
+    # the USED price. We only track NEW-device prices, so discard it.
+    if price and _amazon_buybox_is_used(html_content):
+        print(f"⚠️ buybox is a USED offer (price {price}) -> discarding, new price not available")
+        price = None
 
     if price:
         print(f"The price of the product is: {price}")
