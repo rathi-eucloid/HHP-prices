@@ -77,37 +77,42 @@ def _as_float(value):
         return None
 
 
+_NOT_FETCHED = ('<span style="font-size:11px;font-weight:400;'
+                'font-style:italic;color:#9e9e9e;">data not fetched</span>')
+
+
 def _fmt_price(value):
     f = _as_float(value)
     if f is None:
-        return "&mdash;"
+        return _NOT_FETCHED
     return f"${f:,.2f}"
 
 
 def _fmt_sku(value):
     if value is None:
-        return "&mdash;"
+        return _NOT_FETCHED
     s = str(value).strip()
     if s == "" or s.lower() == NOT_AVAILABLE:
-        return "&mdash;"
+        return _NOT_FETCHED
     return s.upper()
 
 
 def _fmt_vs(amazon_val, samsung_val):
     """vs Amazon = Amazon / Samsung - 1, rendered as a signed percentage.
-    Returns (text, colour). Amazon cheaper than Samsung -> negative -> green."""
+    Returns (text, colour). Sign and colour are swapped: Amazon pricier than
+    Samsung -> shown as negative -> green; Amazon cheaper -> positive -> red."""
     a = _as_float(amazon_val)
     s = _as_float(samsung_val)
     if a is None or s is None or s == 0:
         return "&mdash;", "#9e9e9e"
     pct = (a / s - 1.0) * 100.0
+    if round(pct, 1) == 0:        # rounds to zero -> show a clean "0%"
+        return "0%", "#e0e0e0"
     if pct > 0:
-        colour = "#ff6b6b"        # Amazon pricier than Samsung
-    elif pct < 0:
-        colour = "#4caf50"        # Amazon cheaper than Samsung
+        colour = "#4caf50"        # Amazon pricier than Samsung
     else:
-        colour = "#e0e0e0"
-    return f"{pct:+.1f}%", colour
+        colour = "#ff6b6b"        # Amazon cheaper than Samsung
+    return f"{-pct:+.1f}%", colour
 
 
 def _parse_ts(value):
@@ -156,6 +161,9 @@ def load_report_model(path=EXCEL_PATH):
             groups.append({"col": gc, "label": str(label).strip()})
         s += 1
 
+    # show products in reverse order (last product first)
+    groups.reverse()
+
     # cutoff: keep rows whose timestamp is within the past WINDOW_DAYS
     cutoff = datetime.now() - timedelta(days=WINDOW_DAYS)
 
@@ -180,7 +188,10 @@ def load_report_model(path=EXCEL_PATH):
                 "vs":      vs_txt,
                 "vs_colour": vs_colour,
             })
-        rows.append({"timestamp": str(ts_val).strip(), "cells": cells})
+        rows.append({"timestamp": str(ts_val).strip(), "cells": cells, "_ts": ts})
+
+    # newest first: sort rows by timestamp descending
+    rows.sort(key=lambda row: row["_ts"], reverse=True)
 
     return groups, rows, cutoff
 
@@ -197,8 +208,6 @@ CELL_BG     = "#262626"
 CELL_BG_ALT = "#2d2d2d"
 TEXT        = "#f5f5f5"
 ACCENT      = "#5b9bd5"     # "vs Amazon" header colour
-BREAKER_BG  = "#000000"
-BREAKER_W   = "14px"
 
 TD_BASE = (f"border:1px solid {GRID};padding:8px 12px;"
            f"font-family:Segoe UI,Arial,sans-serif;font-size:13px;"
@@ -212,48 +221,42 @@ def _th(text, *, bg, colour=TEXT, colspan=1, align="center", size="13px", bold=T
             f'text-align:{align};font-weight:{weight};font-size:{size};">{text}</th>')
 
 
-def _breaker_cell(tag="td", rowish=""):
-    return (f'<{tag} style="background:{BREAKER_BG};border:none;'
-            f'width:{BREAKER_W};padding:0;">{rowish}</{tag}>')
-
-
 def build_table_html(groups, rows):
+    # One narrow table per product, stacked vertically so the reader scrolls
+    # down (not sideways). A separator sits between consecutive products.
     parts = []
-    parts.append(
-        f'<table cellspacing="0" cellpadding="0" '
-        f'style="border-collapse:collapse;background:{BG};border:1px solid {GRID};">'
-    )
+    for gi, g in enumerate(groups):
+        parts.append(
+            f'<table cellspacing="0" cellpadding="0" '
+            f'style="border-collapse:collapse;background:{BG};'
+            f'border:1px solid {GRID};width:100%;max-width:640px;'
+            f'margin:0 0 4px 0;">'
+        )
 
-    # ---- row 1: product titles (merged over each group's 4 visible columns) --
-    parts.append("<tr>")
-    parts.append(_th("", bg=TITLE_BG))          # sits above the timestamp column
-    for i, g in enumerate(groups):
-        parts.append(_th(g["label"], bg=TITLE_BG, colspan=4, size="14px"))
-        if i != len(groups) - 1:
-            parts.append(_breaker_cell("th"))
-    parts.append("</tr>")
+        # ---- product title (spans all 5 columns) ----------------------------
+        parts.append("<tr>")
+        parts.append(_th(g["label"], bg=TITLE_BG, colspan=5, size="14px",
+                         align="left"))
+        parts.append("</tr>")
 
-    # ---- row 2: sub-headers --------------------------------------------------
-    parts.append("<tr>")
-    parts.append(_th("Timestamp EST", bg=SUBHEAD_BG, align="center"))
-    for i, _g in enumerate(groups):
+        # ---- sub-headers ----------------------------------------------------
+        parts.append("<tr>")
+        parts.append(_th("Timestamp EST", bg=SUBHEAD_BG))
         parts.append(_th("SKU", bg=SUBHEAD_BG))
         parts.append(_th("Samsung Price", bg=SUBHEAD_BG))
         parts.append(_th("Amazon Price", bg=SUBHEAD_BG))
         parts.append(_th("vs Amazon", bg=SUBHEAD_BG, colour=ACCENT))
-        if i != len(groups) - 1:
-            parts.append(_breaker_cell("th"))
-    parts.append("</tr>")
+        parts.append("</tr>")
 
-    # ---- data rows -----------------------------------------------------------
-    for ridx, row in enumerate(rows):
-        row_bg = CELL_BG if ridx % 2 == 0 else CELL_BG_ALT
-        parts.append("<tr>")
-        parts.append(
-            f'<td style="{TD_BASE}background:{SUBHEAD_BG};text-align:center;'
-            f'font-weight:700;">{row["timestamp"]}</td>'
-        )
-        for i, cell in enumerate(row["cells"]):
+        # ---- data rows (one per timestamp) ----------------------------------
+        for ridx, row in enumerate(rows):
+            cell = row["cells"][gi]
+            row_bg = CELL_BG if ridx % 2 == 0 else CELL_BG_ALT
+            parts.append("<tr>")
+            parts.append(
+                f'<td style="{TD_BASE}background:{SUBHEAD_BG};text-align:center;'
+                f'font-weight:700;">{row["timestamp"]}</td>'
+            )
             parts.append(
                 f'<td style="{TD_BASE}background:{row_bg};text-align:center;'
                 f'font-weight:600;">{cell["sku"]}</td>'
@@ -270,21 +273,25 @@ def build_table_html(groups, rows):
                 f'<td style="{TD_BASE}background:{row_bg};text-align:right;'
                 f'font-weight:700;color:{cell["vs_colour"]};">{cell["vs"]}</td>'
             )
-            if i != len(row["cells"]) - 1:
-                parts.append(_breaker_cell("td"))
-        parts.append("</tr>")
+            parts.append("</tr>")
 
-    parts.append("</table>")
+        parts.append("</table>")
+
+        # ---- separator between products (not after the last one) ------------
+        if gi != len(groups) - 1:
+            parts.append(
+                f'<div style="height:1px;background:{GRID};'
+                f'max-width:640px;margin:18px 0;"></div>'
+            )
+
     return "".join(parts)
 
 
 def build_email_html(groups, rows, cutoff):
-    generated = datetime.now().strftime("%d %b %Y, %H:%M")
     if rows:
         table_html = build_table_html(groups, rows)
         note = (f'Showing {len(rows)} snapshot(s) across {len(groups)} product(s) '
-                f'from the past {WINDOW_DAYS} days '
-                f'(since {cutoff.strftime("%d %b %Y")}).')
+                f'from the past {WINDOW_DAYS} days.')
     else:
         table_html = ('<p style="font-family:Segoe UI,Arial,sans-serif;color:#333;">'
                       f'No price snapshots were recorded in the past {WINDOW_DAYS} days.</p>')
@@ -305,9 +312,6 @@ def build_email_html(groups, rows, cutoff):
     <div style="overflow-x:auto;">
       {table_html}
     </div>
-    <p style="font-size:12px;color:#888;margin:22px 0 0 0;">
-      Report generated automatically on {generated} (EST).
-    </p>
     <p style="font-size:13px;color:#444;margin:18px 0 0 0;">
       Best regards,<br>Price Tracking Automation
     </p>
