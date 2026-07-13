@@ -105,20 +105,20 @@ jobs:
           else
             echo "No changes to commit."
           fi
-      - name: Send price report email (only on success)
-        if: success()
-        env:
-          # Configure these as repository secrets (Settings -> Secrets -> Actions).
-          # MAIL_USERNAME / MAIL_PASSWORD = the Microsoft mailbox login + password
-          # (use an app password if the account has MFA enabled).
-          MAIL_USERNAME: ${{ secrets.MAIL_USERNAME }}
-          MAIL_PASSWORD: ${{ secrets.MAIL_PASSWORD }}
-          MAIL_TO:       ${{ secrets.MAIL_TO }}
-          MAIL_FROM:     ${{ secrets.MAIL_FROM }}
-          # Microsoft defaults (smtp.office365.com:587) are baked into send_mail.py;
-          # override here only if you use a different Microsoft SMTP endpoint.
-        run: |
-          python send_mail.py
+      # - name: Send price report email (only on success)
+      #   if: success()
+      #   env:
+      #     # Configure these as repository secrets (Settings -> Secrets -> Actions).
+      #     # MAIL_USERNAME / MAIL_PASSWORD = the Microsoft mailbox login + password
+      #     # (use an app password if the account has MFA enabled).
+      #     MAIL_USERNAME: ${{ secrets.MAIL_USERNAME }}
+      #     MAIL_PASSWORD: ${{ secrets.MAIL_PASSWORD }}
+      #     MAIL_TO:       ${{ secrets.MAIL_TO }}
+      #     MAIL_FROM:     ${{ secrets.MAIL_FROM }}
+      #     # Microsoft defaults (smtp.office365.com:587) are baked into send_mail.py;
+      #     # override here only if you use a different Microsoft SMTP endpoint.
+      #   run: |
+      #     python send_mail.py
       - name: Collect debug info & show tail of run log
         if: always()
         run: |
